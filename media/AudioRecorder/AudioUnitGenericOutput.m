@@ -47,7 +47,12 @@
     }
     clientABSD = [ADUnitTool streamDesWithLinearPCMformat:flags sampleRate:samplerate channels:channels bytesPerChannel:bytesPerChannel];
     
-    _extFileWriter = [[ADExtAudioFile alloc] initWithWritePath:savePath adsb:clientABSD fileTypeId:type];
+    if (type == ADAudioFileTypeLPCM) {
+        _dataWriteForPCM = [[AudioDataWriter alloc] initWithPath:savePath];
+    } else {
+        _extFileWriter = [[ADExtAudioFile alloc] initWithWritePath:savePath adsb:clientABSD fileTypeId:type];
+    }
+    _clientABSD = clientABSD;
     
     [self setupAUGraph];
     [self setupSource:_source1 sourceFileID:_source1FileID player:_source1Unit];
@@ -139,7 +144,7 @@
 //    CheckStatusReturn(AudioUnitSetProperty(_mixerUnit,kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &mixerASBD, sizeof(mixerASBD)), @"AudioUnitSetProperty outputASBD");
     
     // 设置generic output 输入输出数据格式
-    AudioStreamBasicDescription mixerASBD = _extFileWriter.clientABSD;
+    AudioStreamBasicDescription mixerASBD = _clientABSD;
     CheckStatusReturn(AudioUnitSetProperty(_genericUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &mixerASBD, sizeof(mixerASBD)),@"AudioUnitSetProperty outputASBD1");
     CheckStatusReturn(AudioUnitSetProperty(_genericUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 0, &mixerASBD, sizeof(mixerASBD)),@"AudioUnitSetProperty outputASBD2");
     
@@ -290,15 +295,19 @@
     UInt32 bytesPerFrame = outputASDB.mBytesPerFrame;
     int channelCount = outputASDB.mChannelsPerFrame;
     int bufferListcout = channelCount;
+    int bytesPerChannel = outputASDB.mBitsPerChannel/8;
     
     // 不停的向 generic output 要数据;放在外面，避免重复创建和分配内存
+    BOOL isPlanner = YES;
     AudioBufferList *bufferlist = (AudioBufferList*)malloc(sizeof(AudioBufferList)+sizeof(AudioBuffer)*(channelCount-1));
     if (outputASDB.mFormatFlags & kAudioFormatFlagIsNonInterleaved) {   // planner 存储方式
         bufferlist->mNumberBuffers = channelCount;
         bufferListcout = channelCount;
+        isPlanner = YES;
     } else {    // packet 存储方式
         bufferlist->mNumberBuffers = 1;
         bufferListcout = 1;
+        isPlanner = NO;
     }
     for (int i=0; i<bufferListcout; i++) {
         AudioBuffer buffer = {0};
@@ -335,7 +344,34 @@
         
         inTimeStamp.mSampleTime += framesPerRead;
         // 将渲染得到的数据保存下来
-        [_extFileWriter writeFrames:framesPerRead toBufferData:bufferlist];
+        if (_extFileWriter) {
+            [_extFileWriter writeFrames:framesPerRead toBufferData:bufferlist];
+        } else {
+            if (isPlanner) {
+                // 则需要重新排序一下，将音频数据存储为packet 格式
+                int singleChanelLen = bufferlist->mBuffers[0].mDataByteSize;
+                size_t totalLen = singleChanelLen * channelCount;
+                Byte *buf = (Byte *)malloc(singleChanelLen * channelCount);
+                bzero(buf, totalLen);
+                for (int j=0; j<singleChanelLen/bytesPerChannel;j++) {
+                    for (int i=0; i<channelCount; i++) {
+                        Byte *buffer = bufferlist->mBuffers[i].mData;
+                        memcpy(buf+j*channelCount*bytesPerChannel+bytesPerChannel*i, buffer+j*bytesPerChannel, bytesPerChannel);
+                    }
+                }
+                [_dataWriteForPCM writeDataBytes:buf len:totalLen];
+                
+                
+                // 释放资源
+                free(buf);
+                buf = NULL;
+            } else {
+                AudioBuffer buffer = bufferlist->mBuffers[0];
+                UInt32 bufferLenght = bufferlist->mBuffers[0].mDataByteSize;
+                [_dataWriteForPCM writeDataBytes:buffer.mData len:bufferLenght];
+            }
+        }
+        
     }
     
     // 释放内存
@@ -354,7 +390,9 @@
      *  问题原因：通过ExtAudioFileRef生成的封装格式的文件必须要调用ExtAudioFileDispose()函数才会正常生成音频文件属性，由于没有调用导致此问题
      *  解决方案：混音结束后调用ExtAudioFileDispose()即可。
      */
-    [_extFileWriter closeFile];
+    if (_extFileWriter) {
+        [_extFileWriter closeFile];
+    }
     NSLog(@"渲染线程结束");
     if (self.completeBlock) {
         self.completeBlock();

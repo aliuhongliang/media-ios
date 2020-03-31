@@ -125,15 +125,15 @@
             }
 
             NSString *path = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES)[0];
-            _audioPath2 = [path stringByAppendingPathComponent:@"test_back_mixer.m4a"];
+            _audioPath2 = [path stringByAppendingPathComponent:@"test_back_mixer.PCM"];
             self.audioUnitRecorder = nil;
 
-            _saveFileType = ADAudioFileTypeM4A;
+            _saveFileType = ADAudioFileTypeLPCM;
 
             // 由于AudioFilePlayer无法读取PCM裸数据文件，所以这里用MP3
             NSString *file1 = [[NSBundle mainBundle] pathForResource:@"background" ofType:@"mp3"];
             self.audioGenericOutput = [[AudioUnitGenericOutput alloc] initWithPath1:file1 volume:0.1 path2:_audioPath volume:0.9];
-            [self.audioGenericOutput setupFormat:ADAudioFormatType16Int audioSaveType:ADAudioSaveTypePlanner sampleRate:44100 channels:2 savePath:_audioPath2 saveFileType:_saveFileType];
+            [self.audioGenericOutput setupFormat:_formatType audioSaveType:_planner?ADAudioSaveTypePlanner:ADAudioSaveTypePacket sampleRate:_sampleRate channels:_channels savePath:_audioPath2 saveFileType:_saveFileType];
             NSTimeInterval timeBegin = [NSDate timeIntervalSinceReferenceDate];
             NSLog(@"开始渲染 .....");
             __weak typeof(self)weakSelf = self;
@@ -208,7 +208,7 @@
                 [self.audioGenericOutput stop];
                 self.audioGenericOutput = nil;
             }
-            
+            // 保存的封装格式 要对应
             _audioPath = [path stringByAppendingPathComponent:@"test-mixer.m4a"];
             NSLog(@"文件目录 ==>%@",_audioPath);
             
@@ -233,6 +233,7 @@
             [self.audioGenericOutput start];
         }
         else if(_selectIndex == 5){
+            // 保存的封装格式 要对应
             _audioPath = [path stringByAppendingPathComponent:@"test.m4a"];
             NSLog(@"文件目录 ==>%@",_audioPath);
             
@@ -264,7 +265,12 @@
         }
         
         if (_saveFileType == ADAudioFileTypeLPCM) {
-            self.audioUnitPlay = [[ADAudioUnitPlay alloc] initWithChannels:_channels sampleRate:_sampleRate formatType:_formatType planner:_planner path:_audioPath];
+            NSInteger _selectIndex = _dropdownListView.selectedIndex;
+            if (_selectIndex == 5) {   // 播放方式不一样
+                self.audioUnitPlay = [[ADAudioUnitPlay alloc] initWithChannels:_channels sampleRate:_sampleRate formatType:_formatType planner:_planner path:_audioPath2];
+            } else {
+                self.audioUnitPlay = [[ADAudioUnitPlay alloc] initWithChannels:_channels sampleRate:_sampleRate formatType:_formatType planner:_planner path:_audioPath];
+            }
         } else {
             NSInteger _selectIndex = _dropdownListView.selectedIndex;
             if (_selectIndex == 5) {        // 还添加背景音乐

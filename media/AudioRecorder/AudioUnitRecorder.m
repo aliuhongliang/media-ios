@@ -291,8 +291,8 @@
     // 1、开启麦克风录制功能
     UInt32 flag = 1;
     OSStatus status = noErr;
-    // 对于麦克风：第三个参数麦克风为kAudioUnitScope_Input， 第四个参数为1
-    // 对于扬声器：第三个参数麦克风为kAudioUnitScope_Output，第四个参数为0
+    // 对于麦克风：第三个参数为kAudioUnitScope_Input， 第四个参数为1
+    // 对于扬声器：第三个参数为kAudioUnitScope_Output，第四个参数为0
     // 其它参数都一样;扬声器默认是打开的
     status = AudioUnitSetProperty(_ioUnit, kAudioOutputUnitProperty_EnableIO, kAudioUnitScope_Input, 1, &flag, sizeof(flag));
     if (status != noErr) {
@@ -308,7 +308,7 @@
     NSInteger chs = self.audioSession.currentChannels;
     AudioStreamBasicDescription recordASDB = [ADUnitTool streamDesWithLinearPCMformat:flags sampleRate:rate channels:chs bytesPerChannel:_bytesPerchannel];
     
-    // 设置录制音频的输数据格式
+    // 设置录制音频的输出数据格式
     status = AudioUnitSetProperty(_ioUnit, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Output, 1, &recordASDB, sizeof(recordASDB));
     if (status != noErr) {
         NSLog(@"AudioUnitSetProperty _ioUnit kAudioUnitScope_Output fail %d",status);
@@ -382,7 +382,7 @@
             AudioUnitSetProperty(_ioUnit, kAudioOutputUnitProperty_SetInputCallback, kAudioUnitScope_Output, 1, &callback, sizeof(callback));
         }
         return;
-    } else {        // 如果播放背景音乐
+    } else {        // 开启了混音
         OSStatus status = noErr;
         AUGraphConnectNodeInput(_augraph, _mixerNode, 0, _ioNode, 0);
         

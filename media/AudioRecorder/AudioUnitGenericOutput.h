@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "AudioCommon.h"
 #import "ADExtAudioFile.h"
+#import "AudioDataWriter.h"
 
 /** 用来学习离线音频处理，什么叫离线音频处理，就是音频的最终不是输出给扬声器而是输出给应用端
  */
@@ -33,6 +34,9 @@
     
     BOOL                        _offlineRun;
     ADExtAudioFile              *_extFileWriter;
+    // 用于写裸PCM数据到音频文件中
+    AudioDataWriter             *_dataWriteForPCM;
+    AudioStreamBasicDescription _clientABSD;
     float                       _volume[2];
     UInt32                      _totalFrames;
 }
